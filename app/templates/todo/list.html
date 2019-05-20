@@ -1,0 +1,521 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load todo %}
+
+{% block headscript %}
+{# Tempus Dominus - datepicker #}
+  {# MOMENTS.JS #}
+  <script src="{% static 'js/moment-with-locales.min.js' %}"></script>
+  {# END OF MOMENTS.JS #}
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/tempusdominus-bootstrap-4/5.0.0-alpha14/js/tempusdominus-bootstrap-4.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tempusdominus-bootstrap-4/5.0.0-alpha14/css/tempusdominus-bootstrap-4.min.css" />
+{# END OF Tempus Dominus - datepicker #}
+{% endblock %}
+
+{% block content %}
+
+{% include "../modal/todo_detail.html" %}
+
+<main role="main" class="container">
+  <div class="d-flex flex-column align-items-center p-3 my-3 text-black-50 rounded shadow-sm">
+    <div id='todo-create-container' class="input-group flex-column">
+      <div class="d-flex flex-row">
+        <div class="p-2 col-9">
+          <input id="input-title"
+                 class="todo-create form-control"
+                 type="text"
+                 name="title"
+                 placeholder="할 일을 입력하고 간편하게 [ENTER]로 등록하세요!">
+        </div>
+        <div class="p-2 col-3">
+          <div class="input-group date" id="datetimepicker-create" data-target-input="nearest">
+            <input type="text" class="todo-create form-control datetimepicker-input"
+                   name="due-date"
+                   data-target="#datetimepicker-create"
+                   />
+            <div class="input-group-append" data-target="#datetimepicker-create" data-toggle="datetimepicker">
+                <div class="input-group-text"><i class="fa fa-calendar"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex flex-row input-group">
+        <div class="p-2 col-12">
+          <textarea id="input-detail"
+                    class="todo-create form-control form-control-sm autosize" type="text"
+                    name="detail"
+                    rows="2"
+                    placeholder="더 자세히 할 일에 대해 기록이 필요하다면 사용하세요!"
+          ></textarea>
+        </div>
+      </div>
+      <div class="d-flex flex-column align-items-end input-group">
+        <button id='btn-create-todo' type="button" class="btn btn-info">등록</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="my-3 p-3 bg-white rounded shadow-sm">
+    <h6 class="border-bottom border-gray pb-2 mb-0">Need to:Do List</h6>
+      <div id="todo-container">
+      {% for todo in todo_list %}
+        <div class="todo media text-muted pt-3" data-id="{{ todo.id }}">
+          <input type="hidden" name="todo-id" value="{{ todo.id }}">
+          <button class="btn btn-link"><i class="material-icons mr-2 btn-checkbox"
+                                 style="font-size:32px;color:black">{{ todo.completed|complete_font_maker }}</i></button>
+{#          <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#modal-todo-detail">#}
+{#  Launch demo modal#}
+{#</button>#}
+          <p class="todo-detail media-body pb-3 mb-0 small lh-125 border-bottom border-gray">
+           <strong class="d-block text-gray-dark ">{{ todo.title|default_if_none:'-' }}</strong>
+           {{ todo.detail|default_if_none:'-' }}
+{#           <span class="due-date d-block text-primary">{{ todo.due_date|default_if_none:'-' }}</span>#}
+           <span class="due-date d-block text-primary">{{ todo.due_date|date:'Y-m-d H:i' }}</span>
+          </p>
+
+        </div>
+      {% endfor %}
+      </div>
+    <small class="d-block text-right mt-3">
+      <p>각 todo를 마우스로 움직여 우선순위를 변경해보세요!</p>
+    </small>
+  </div>
+
+  <div class="my-3 p-3 bg-light rounded shadow-sm">
+    <h6 class="border-bottom border-gray pb-2 mb-0">:Done List</h6>
+    <del id="done-container">
+      {% for done in done_list %}
+        <div class="done media text-muted pt-3" data-id="{{ done.id }}">
+          <input type="hidden" name="todo-id" value="{{ done.id }}">
+          <button class="btn btn-link"><i class="material-icons mr-2 btn-checkbox"
+                                 style="font-size:32px;color:black">{{ done.completed|complete_font_maker }}</i></button>
+          <p class="todo-detail media-body pb-3 mb-0 small lh-125 border-bottom border-gray">
+            <strong class="d-block text-gray-dark ">{{ done.title|default_if_none:'-' }}</strong>
+            {{ done.detail|default_if_none:'-' }}
+            <span class="due-date d-block text-primary">{{ done.due_date|date:'Y-m-d H:i' }}</span>
+          </p>
+        </div>
+      {% endfor %}
+     </del>
+
+
+    <small class="d-block text-right mt-3">
+      <p>체크박스를 해제하면 다시 todo list로 이동합니다</p>
+    </small>
+  </div>
+</main>
+
+<script>
+  const CHECKED = 'check';
+  const UNCHECKED = 'check_box_outline_blank';
+
+  const sortable = new Draggable.Sortable(document.querySelectorAll('div#todo-container'), {
+    draggable: 'div.todo',
+    delay: 200
+  });
+
+  sortable.on('sortable:start', () => {});
+  sortable.on('sortable:sort', () => {});
+  sortable.on('sortable:sorted', () => { });
+  sortable.on('sortable:stop', () => { updateOrder() });
+
+  // todo create
+  let createTodo = (rawData) => {
+    let data = {}
+
+    data['user'] = {{ user.id }}
+    data['category'] = {{ category.id }}
+    data['completed'] = 0
+
+    // title, detail, due_date
+    for (let key in rawData) {
+      if (rawData[key] !== null && rawData[key] !== '' ) {
+        data[key] = rawData[key]
+      }
+    }
+
+    // due_date check format check
+    let datetimeReg = new RegExp("[0-9]{4}-[0-9]{2}-[0-9]{2}.[0-9]{2}:[0-9]{2}");
+    if (!datetimeReg.exec(data['due_date'])) {
+      data['due_date'] = null
+    }
+
+    {#let priority # 추후 작업 #}
+
+    // JSON.stringify
+    data = JSON.stringify(data)
+    $.ajax({
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      url: '/api/todos/',
+      type: 'POST',
+      data: data,
+      success: function (response) {
+        // 새로 추가한 todo를 가장 마지막 순서로 추가
+        updateOrder(response.id);
+
+        // todo) 더 좋은 방법 고민해보기
+        location.reload()
+      },
+      error: function (jqXHR, textStatus, errorThrown) {
+        // log the error to the console
+        ("통신에 장애가 있습니다: " + textStatus, errorThrown);
+      },
+      complete: function () {
+      }
+    })
+  }
+
+  // todo 완료/미완료 토글
+  let updateTodo = (rawData) => {
+    let id = rawData['id']
+    let data = {}
+
+    // title, detail, due_date
+    for (let key in rawData) {
+      if (rawData[key] !== null && rawData[key] !== '' ) {
+        data[key] = rawData[key]
+      }
+    }
+
+    // due_date check format check
+    let datetimeReg = new RegExp("[0-9]{4}-[0-9]{2}-[0-9]{2}.[0-9]{2}:[0-9]{2}");
+    if (!datetimeReg.exec(data['due_date'])) {
+      data['due_date'] = null
+    }
+
+
+    // JSON.stringify
+    data = JSON.stringify(data)
+    $.ajax({
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      url: '/api/todos/' + id + '/',
+      type: 'PATCH',
+      data: data,
+      success: function (response) {
+        location.reload()
+      },
+      error: function (jqXHR, textStatus, errorThrown) {
+        // log the error to the console
+        console.log("통신에 장애가 있습니다: " + textStatus, errorThrown);
+      },
+      complete: function () {
+      }
+    })
+  }
+
+  // todo 완료/미완료 토글
+  let deleteTodo = (id) => {
+
+    $.ajax({
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      url: '/api/todos/' + id + '/',
+      type: 'DELETE',
+      success: function (response) {
+        location.reload()
+      },
+      error: function (jqXHR, textStatus, errorThrown) {
+        // log the error to the console
+        console.log("통신에 장애가 있습니다: " + textStatus, errorThrown);
+      },
+      complete: function () {
+      }
+    })
+  }
+
+  // todo 완료/비완료 토글
+  let updateTodoCompleteStatus = (id, rawData) => {
+    let completed = rawData['completed'] === CHECKED ? 1 : 0
+    let data = {
+      'completed': completed
+    }
+    // JSON.stringify
+    data = JSON.stringify(data)
+    $.ajax({
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      url: '/api/todos/' + id + '/',
+      type: 'PATCH',
+      data: data,
+      success: function (response) {
+      },
+      error: function (jqXHR, textStatus, errorThrown) {
+        // log the error to the console
+        console.log("통신에 장애가 있습니다: " + textStatus, errorThrown);
+      },
+      complete: function () {
+      }
+    })
+  }
+
+  // todo order update
+  let updateOrder = (newTodoId = null) => {
+
+    let id = {{ order.id }}
+    const orderArr = makeOrderArr($('#todo-container').children())
+    if (newTodoId) {
+      orderArr.push(newTodoId)
+    }
+
+    const order = {'order' : orderArr }
+    const order_json = JSON.stringify(order)
+
+    let data = {
+      'order_json': order_json
+    }
+    // JSON.stringify
+    data = JSON.stringify(data)
+    $.ajax({
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      url: '/api/orders/' + id + '/',
+      type: 'PATCH',
+      data: data,
+      success: function (response) {
+      },
+      error: function (jqXHR, textStatus, errorThrown) {
+        // log the error to the console
+        alert("통신에 장애가 있습니다: " + textStatus, errorThrown);
+      },
+      complete: function () {
+      }
+    })
+  }
+
+  // get todo detail
+  let showTodoDetail = (id) => {
+
+    // JSON.stringify
+    $.ajax({
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      url: '/api/todos/' + id + '/',
+      type: 'GET',
+      success: function (response) {
+        fillDetailInputField(response)
+      },
+      error: function (jqXHR, textStatus, errorThrown) {
+        // log the error to the console
+        alert("통신에 장애가 있습니다: " + textStatus, errorThrown);
+      },
+      complete: function () {
+      }
+    })
+  }
+
+
+  // due date checker
+  let dueDateChecker = () => {
+    let now = moment()
+    let dueDateSpan = $('span.due-date');
+    for (let idx=0; idx < dueDateSpan.length;idx++) {
+      let dueDate = dueDateSpan[idx].textContent
+      if (dueDate) {
+        let stdDueDate = datetimeFormatter(dueDate, 'YYYY-MM-DD HH:mm')
+        if( now.isAfter(stdDueDate) ) {
+          dueDateSpan[idx].className = 'due-date d-block text-danger'
+        }else{
+          dueDateSpan[idx].className = 'due-date d-block text-primary'
+        }
+      }
+    }
+  }
+
+
+  $(function() {
+    // 마감기한 체크
+    dueDateChecker()
+
+    // 마감기한 1분 단위 체크
+    setInterval(dueDateChecker, 1000*60)
+
+    // todo 입력창에 초기포커
+    $('#input-title').focus()
+
+    // todo checkbox click event assign
+    $('.btn-checkbox').on("click", function(e) {
+      let wholeNode = e.target.parentNode.parentNode
+
+      if (wholeNode.className.includes('todo')) {
+        // todo 이면
+        // 1. classname todo -> done 바꾸고
+        wholeNode.className = 'done media text-muted pt-3'
+
+        // 1.1 checkbox 이미지 바꾸고
+        iconNode = e.target
+        iconNode.textContent = CHECKED
+
+        // 2. #done-container에 안에 마지막에 해당 div넣고
+        $('#done-container').append(wholeNode)
+
+        // 3. 해당 div의 hidden input의 id로 complete 1로 바꾸는 api 전송
+        let id = wholeNode.dataset.id
+        let rawData = {'completed':iconNode.textContent}
+
+        updateTodoCompleteStatus(id, rawData)
+
+      }else{
+        // done 이면
+        // 1. classname done -> todo 바꾸고
+         wholeNode.className = 'todo media text-muted pt-3'
+
+       // 1.1 checkbox 이미지 바꾸고
+        iconNode = e.target
+        iconNode.textContent = UNCHECKED
+
+        // 2. #todo-container에 안에 마지막에 해당 div넣고
+        $('#todo-container').append(wholeNode)
+
+        // 3. 해당 div의 hidden input의 id로 complete 0로 바꾸는 api 전송
+        let id = wholeNode.dataset.id
+        let rawData = {'completed':iconNode.textContent}
+
+        updateTodoCompleteStatus(id, rawData)
+      }
+      // todo order update
+      updateOrder()
+    })
+
+
+    // todo create button click event assign
+    $('#btn-create-todo').on("click", function (e) {
+      let className = '.todo-create'
+      let rawData = inputFieldToRawData(className)
+      createTodo(rawData)
+    })
+
+    // todo update button click event assign
+    $('#btn-update-todo').on("click", function (e) {
+      let className = '.todo-update'
+      let rawData = inputFieldToRawData(className)
+      updateTodo(rawData)
+    })
+
+    // todo delete button click event assign
+    $('#btn-delete-todo').on("click", function (e) {
+      let className = '.todo-update'
+      let rawData = inputFieldToRawData(className)
+      deleteTodo(rawData.id)
+    })
+
+    // todo title field enter
+    $('#input-title').on('keypress', function (e) {
+      const ENTER = 13
+      if (e.which == ENTER) {
+        let className = '.todo-create'
+        let rawData = inputFieldToRawData(className)
+        createTodo(rawData)
+      }
+    })
+
+    // enter todo detail
+    //$('#modal-todo-detail').modal({keyboard:'false'})
+    $('p.todo-detail').on("click", function(e) {
+      let todoNode
+      if (e.target.tagName === 'P') {
+        todoNode = e.target.parentNode
+      }else {
+        todoNode = e.target.parentNode.parentNode
+      }
+      showTodoDetail(todoNode.dataset.id)
+      $('#modal-todo-detail').modal('show')
+    })
+
+
+    // Tempus Dominus - datepicker
+    $('#datetimepicker-create').datetimepicker({'format': 'YYMMDD HHmm'});
+    $('#datetimepicker-update').datetimepicker({'format': 'YYMMDD HHmm'});
+
+    // autosize for textarea
+    $("textarea.autosize").on('keypress', function (e) {
+      const ENTER = 13
+      if(e.which == ENTER) {
+        let numOfRows = $(this).attr('rows')
+        $(this).attr('rows', parseInt(numOfRows)+1)
+      }
+    });
+  })
+
+
+  // util functions
+  let inputFieldToRawData = (className) => {
+    let rawData = {}
+    let inputNodeList = $(className).get()
+    for (let idx in inputNodeList) {
+      let name = inputNodeList[idx].name
+      let value
+      if (name === 'due-date') {
+        name = 'due_date'
+        value = datetimeFormatter(inputNodeList[idx].value, format='YYMMDD HHmm')
+      }else if (name === 'detail') {
+        value = inputNodeList[idx].value
+      }else{
+        value = inputNodeList[idx].value
+      }
+      rawData[name] = value
+    }
+    return rawData
+  }
+
+
+  // 모달에서 todo detail 정보 뿌려줌
+  let fillDetailInputField = (data) => {
+    let inputNodeList = $('.todo-update').get()
+    for (let idx in inputNodeList) {
+      let name = inputNodeList[idx].name
+      let value
+
+      if (name === 'due-date') {
+        if ( data.due_date !== '' && data.due_date !== null) {
+          inputNodeList[idx].value = moment(data.due_date).format('YYMMDD HHmm')
+        }else {
+          inputNodeList[idx].value = null
+        }
+      }else if (name === 'detail') {
+        inputNodeList[idx].value = data.detail
+      }else if (name === 'title') {
+        inputNodeList[idx].value = data.title
+      }else if (name === 'id') {
+        inputNodeList[idx].value = data.id
+      }
+    }
+  }
+
+  let makeOrderArr = (todoNodeList) => {
+    let orderArr = []
+    for (let idx in todoNodeList) {
+      if(todoNodeList[idx].tagName === 'DIV') {
+        if(todoNodeList[idx].className === 'todo media text-muted pt-3'
+            || todoNodeList[idx].className === 'todo media text-muted pt-3 draggable-source--is-dragging draggable--over' ){
+          orderArr.push(parseInt(todoNodeList[idx].dataset.id))
+        }
+      }else {
+        break;
+      }
+    }
+    return orderArr
+  }
+
+
+  // date time formatter
+  let datetimeFormatter = (datetime, format='YYMMDD HHmm') => {
+    const stdFormatTime = moment(datetime, format).format('YYYY-MM-DDThh:mm')
+    return stdFormatTime
+  }
+</script>
+
+{% endblock %}
